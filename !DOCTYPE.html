@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>报关单管理</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background: #f5f7fa; }
+        .filter-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .table-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .table th { background: #f8f9fa; font-weight: 600; white-space: nowrap; }
+        .table td { white-space: nowrap; vertical-align: middle; }
+        .status-pending { color: #f39c12; }
+        .status-partial { color: #3498db; }
+        .status-completed { color: #27ae60; }
+        .btn-search { background: #409eff; border-color: #409eff; }
+        .btn-search:hover { background: #66b1ff; border-color: #66b1ff; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <h4 class="mb-4"><i class="bi bi-file-earmark-text"></i> 报关单管理 - 待报关列表</h4>
+        
+        <!-- 筛选区域 -->
+        <div class="filter-card">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">销售订单号</label>
+                    <input type="text" class="form-control" id="filterOrderNo" placeholder="请输入销售订单号">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">马帮SKU</label>
+                    <input type="text" class="form-control" id="filterSku" placeholder="请输入马帮SKU">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">创建时间（开始）</label>
+                    <input type="date" class="form-control" id="filterStartDate">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">创建时间（结束）</label>
+                    <input type="date" class="form-control" id="filterEndDate">
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary btn-search me-2" onclick="search()"><i class="bi bi-search"></i> 查询</button>
+                    <button class="btn btn-outline-secondary" onclick="reset()"><i class="bi bi-arrow-counterclockwise"></i> 重置</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 列表区域 -->
+        <div class="table-card">
+            <div class="d-flex justify-content-between mb-3">
+                <span class="text-muted">共 <span id="totalCount">0</span> 条记录</span>
+                <button class="btn btn-success btn-sm"><i class="bi bi-file-earmark-arrow-up"></i> 批量报关</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="checkAll" onclick="toggleAll()"></th>
+                            <th>销售出库单号</th>
+                            <th>单据状态</th>
+                            <th>日期</th>
+                            <th>源单编号</th>
+                            <th>销售组织</th>
+                            <th>发货组织</th>
+                            <th>客户</th>
+                            <th>币别</th>
+                            <th>订单单号</th>
+                            <th>马帮SKU</th>
+                            <th>物料编码</th>
+                            <th>物料名称</th>
+                            <th>实发数量</th>
+                            <th>含税单价</th>
+                            <th>价税合计</th>
+                            <th>仓库</th>
+                            <th>马帮交易单号</th>
+                            <th>马帮入库仓</th>
+                            <th>未报关数量</th>
+                            <th>已报关数量</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+            <!-- 分页 -->
+            <nav class="mt-3">
+                <ul class="pagination justify-content-end mb-0" id="pagination"></ul>
+            </nav>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 模拟数据
+        const mockData = [
+            { outboundNo: 'CK202412001', status: '待报关', date: '2024-12-15', sourceNo: 'YD202412001', salesOrg: '华南销售部', shipOrg: '深圳仓储', customer: '亚马逊美国', currency: 'USD', orderNo: 'SO202412001', mabangSku: 'MB-SKU-001', materialCode: 'M001', materialName: '蓝牙耳机', actualQty: 100, unitPrice: 25.00, totalAmount: 2500.00, warehouse: '深圳主仓', mabangTradeNo: 'MT202412001', mabangWarehouse: '美国FBA仓', pendingQty: 80, declaredQty: 20 },
+            { outboundNo: 'CK202412002', status: '部分报关', date: '2024-12-14', sourceNo: 'YD202412002', salesOrg: '华东销售部', shipOrg: '上海仓储', customer: '速卖通', currency: 'EUR', orderNo: 'SO202412002', mabangSku: 'MB-SKU-002', materialCode: 'M002', materialName: '手机壳', actualQty: 500, unitPrice: 3.50, totalAmount: 1750.00, warehouse: '上海主仓', mabangTradeNo: 'MT202412002', mabangWarehouse: '欧洲仓', pendingQty: 200, declaredQty: 300 },
+            { outboundNo: 'CK202412003', status: '待报关', date: '2024-12-13', sourceNo: 'YD202412003', salesOrg: '华南销售部', shipOrg: '广州仓储', customer: 'eBay英国', currency: 'GBP', orderNo: 'SO202412003', mabangSku: 'MB-SKU-003', materialCode: 'M003', materialName: '数据线', actualQty: 1000, unitPrice: 1.20, totalAmount: 1200.00, warehouse: '广州主仓', mabangTradeNo: 'MT202412003', mabangWarehouse: '英国仓', pendingQty: 1000, declaredQty: 0 },
+            { outboundNo: 'CK202412004', status: '已报关', date: '2024-12-12', sourceNo: 'YD202412004', salesOrg: '华北销售部', shipOrg: '北京仓储', customer: 'Wish平台', currency: 'USD', orderNo: 'SO202412004', mabangSku: 'MB-SKU-004', materialCode: 'M004', materialName: '充电宝', actualQty: 200, unitPrice: 15.00, totalAmount: 3000.00, warehouse: '北京主仓', mabangTradeNo: 'MT202412004', mabangWarehouse: '美西仓', pendingQty: 0, declaredQty: 200 },
+            { outboundNo: 'CK202412005', status: '待报关', date: '2024-12-11', sourceNo: 'YD202412005', salesOrg: '华南销售部', shipOrg: '深圳仓储', customer: 'Shopee', currency: 'SGD', orderNo: 'SO202412005', mabangSku: 'MB-SKU-005', materialCode: 'M005', materialName: '智能手表', actualQty: 50, unitPrice: 80.00, totalAmount: 4000.00, warehouse: '深圳主仓', mabangTradeNo: 'MT202412005', mabangWarehouse: '新加坡仓', pendingQty: 50, declaredQty: 0 },
+        ];
+
+        let currentPage = 1;
+        const pageSize = 10;
+        let filteredData = [...mockData];
+
+        function getStatusClass(status) {
+            if (status === '待报关') return 'status-pending';
+            if (status === '部分报关') return 'status-partial';
+            return 'status-completed';
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            const start = (currentPage - 1) * pageSize;
+            const pageData = filteredData.slice(start, start + pageSize);
+            
+            tbody.innerHTML = pageData.map(row => `
+                <tr>
+                    <td><input type="checkbox" class="row-check"></td>
+                    <td>${row.outboundNo}</td>
+                    <td><span class="${getStatusClass(row.status)}">${row.status}</span></td>
+                    <td>${row.date}</td>
+                    <td>${row.sourceNo}</td>
+                    <td>${row.salesOrg}</td>
+                    <td>${row.shipOrg}</td>
+                    <td>${row.customer}</td>
+                    <td>${row.currency}</td>
+                    <td>${row.orderNo}</td>
+                    <td>${row.mabangSku}</td>
+                    <td>${row.materialCode}</td>
+                    <td>${row.materialName}</td>
+                    <td>${row.actualQty}</td>
+                    <td>${row.unitPrice.toFixed(2)}</td>
+                    <td>${row.totalAmount.toFixed(2)}</td>
+                    <td>${row.warehouse}</td>
+                    <td>${row.mabangTradeNo}</td>
+                    <td>${row.mabangWarehouse}</td>
+                    <td><span class="text-danger">${row.pendingQty}</span></td>
+                    <td><span class="text-success">${row.declaredQty}</span></td>
+                    <td><button class="btn btn-sm btn-outline-primary">报关</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('totalCount').textContent = filteredData.length;
+            renderPagination();
+        }
+
+        function renderPagination() {
+            const totalPages = Math.ceil(filteredData.length / pageSize);
+            const pagination = document.getElementById('pagination');
+            let html = `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="goPage(${currentPage - 1})">上一页</a></li>`;
+            for (let i = 1; i <= totalPages; i++) {
+                html += `<li class="page-item ${currentPage === i ? 'active' : ''}"><a class="page-link" href="#" onclick="goPage(${i})">${i}</a></li>`;
+            }
+            html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="goPage(${currentPage + 1})">下一页</a></li>`;
+            pagination.innerHTML = html;
+        }
+
+        function goPage(page) {
+            const totalPages = Math.ceil(filteredData.length / pageSize);
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            renderTable();
+        }
+
+        function search() {
+            const orderNo = document.getElementById('filterOrderNo').value.trim().toLowerCase();
+            const sku = document.getElementById('filterSku').value.trim().toLowerCase();
+            const startDate = document.getElementById('filterStartDate').value;
+            const endDate = document.getElementById('filterEndDate').value;
+
+            filteredData = mockData.filter(row => {
+                if (orderNo && !row.orderNo.toLowerCase().includes(orderNo)) return false;
+                if (sku && !row.mabangSku.toLowerCase().includes(sku)) return false;
+                if (startDate && row.date < startDate) return false;
+                if (endDate && row.date > endDate) return false;
+                return true;
+            });
+
+            currentPage = 1;
+            renderTable();
+        }
+
+        function reset() {
+            document.getElementById('filterOrderNo').value = '';
+            document.getElementById('filterSku').value = '';
+            document.getElementById('filterStartDate').value = '';
+            document.getElementById('filterEndDate').value = '';
+            filteredData = [...mockData];
+            currentPage = 1;
+            renderTable();
+        }
+
+        function toggleAll() {
+            const checkAll = document.getElementById('checkAll').checked;
+            document.querySelectorAll('.row-check').forEach(cb => cb.checked = checkAll);
+        }
+
+        // 初始化
+        renderTable();
+    </script>
+</body>
+</html>
